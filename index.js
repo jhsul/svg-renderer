@@ -53,7 +53,7 @@ const fileHandler = () => {
 };
 
 const renderSvg = (svg) => {
-  //setCoordinateTransform(svg);
+  setCoordinateTransform(svg);
   drawPoints(svg);
 
   console.log(svg);
@@ -100,7 +100,7 @@ const setCoordinateTransform = (svg) => {
   const { x, y, width, height } =
     svg.getElementsByTagName("svg")[0].viewBox.baseVal;
 
-  const matrix = ortho(x, x + width, y, y + height, 1, -1);
+  const matrix = ortho(x, x + width, y + height, y, 1, -1);
 
   console.log("Setting coordinate transform matrix: ");
   console.log(matrix);

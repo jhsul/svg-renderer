@@ -16,7 +16,7 @@
       attribute vec4 vPosition;
       uniform mat4 coordinateTransform;
       void main() {
-        gl_Position =vPosition;
+        gl_Position = coordinateTransform * vPosition;
       }
     </script>
     <script id="fshader" type="x-shader/x-fragment">
