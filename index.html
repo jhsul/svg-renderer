@@ -4,19 +4,27 @@
     <meta charset="utf-8" />
     <title>SVG Renderer</title>
 
-    <!-- Stylesheet and Font -->
+    <!-- Stylesheet and Raleway font -->
     <link rel="stylesheet" href="styles.css" />
-
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Raleway&display=swap"
       rel="stylesheet"
     />
 
     <!-- OpenGL Shaders -->
-    <script id="vshader" type="x-shader/x-vertex" src="vert.glsl"></script>
-    <script id="fshader" type="x-shader/x-fragment" src="frag.glsl"></script>
+    <script id="vshader" type="x-shader/x-vertex">
+      attribute vec4 vPosition;
+      uniform mat4 coordinateTransform;
+      void main() {
+        gl_Position =vPosition;
+      }
+    </script>
+    <script id="fshader" type="x-shader/x-fragment">
+      precision mediump float;
+      void main() {
+        gl_FragColor = vec4(0, 0, 0, 1);
+      }
+    </script>
 
     <!-- Local Utilities (from class) -->
     <script src="lib/webgl-utils.js"></script>
@@ -30,7 +38,7 @@
     <script src="index.js"></script>
   </head>
 
-  <body onload="main();">
+  <body onload="main()">
     <div class="global-container">
       <div class="content">
         <h1>SVG Renderer</h1>
