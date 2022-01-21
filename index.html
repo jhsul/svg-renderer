@@ -46,11 +46,16 @@
           This is my homework 1 submission for CS 4731: Computer Graphics. The
           application runs entirely within the browser without any frontend
           framework, webpack, or even npm. The svg file is parsed using the
-          browser's native xml parser, and rendering is done with WebGL.
-          <a href="https://github.com">View the source code online!</a>
+          browser's native xml parser, and rendering is done with WebGL. Only
+          "line" tags are supported.
         </p>
-
+        <a href="https://github.com/jhsul/svg-renderer"
+          >View the source code online!</a
+        >
+        <br />
+        <br />
         <input type="file" id="upload" onchange="fileHandler();" />
+        <br />
       </div>
 
       <canvas id="webgl" class="content"></canvas>
