@@ -14,15 +14,26 @@
     <!-- OpenGL Shaders -->
     <script id="vshader" type="x-shader/x-vertex">
       attribute vec4 vPosition;
-      uniform mat4 coordinateTransform;
+      attribute vec4 vColor;
+
+      uniform mat4 translateTransform;
+      uniform mat4 orthoTransform;
+      uniform mat4 zoomTransform;
+
+      varying vec4 fColor;
+
       void main() {
-        gl_Position = coordinateTransform * vPosition;
+        gl_Position = zoomTransform * translateTransform * orthoTransform * vPosition;
+        fColor = vColor;
+
       }
     </script>
     <script id="fshader" type="x-shader/x-fragment">
       precision mediump float;
+
+      varying vec4 fColor;
       void main() {
-        gl_FragColor = vec4(0, 0, 0, 1);
+        gl_FragColor = fColor;
       }
     </script>
 
@@ -30,9 +41,6 @@
     <script src="lib/webgl-utils.js"></script>
     <script src="lib/initShaders.js"></script>
     <script src="lib/MV.js"></script>
-
-    <!-- JQuery for sanity -->
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
 
     <!-- The actual source code -->
     <script src="index.js"></script>
@@ -54,11 +62,16 @@
         >
         <br />
         <br />
-        <input type="file" id="upload" onchange="fileHandler();" />
+        <div class="button-row">
+          <input type="file" id="upload" onchange="fileHandler();" />
+          <div class="row-spacer"></div>
+          <button onclick="">Clear</button>
+          <button>Export</button>
+        </div>
         <br />
       </div>
 
-      <canvas id="webgl" class="content"></canvas>
+      <canvas id="webgl"></canvas>
     </div>
   </body>
 </html>

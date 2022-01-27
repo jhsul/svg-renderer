@@ -16,7 +16,7 @@ html {
 }
 
 .content {
-  width: 800px;
+  width: 560px;
   background: white;
   border-radius: 10px;
   border: 1px solid lightgrey;
@@ -24,14 +24,18 @@ html {
   margin: 10px;
 }
 
-#placeholder {
+#webgl {
+  width: 600px;
   height: 600px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
+  border-radius: 10px;
+  border: 1px solid lightgrey;
+  background: white;
 }
 
-#webgl {
-  height: 600px;
+.button-row {
+  display: flex;
+}
+
+.row-spacer {
+  flex: 1;
 }
