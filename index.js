@@ -1,8 +1,6 @@
-/**
- * Global variables
- */
-
+// Constants
 const CANVAS_SIZE = 600;
+const SCROLL_SCALE = 500; // smaller = more sensitive
 
 // The current XML tree as parsed by the DOMParser
 let svg = null;
@@ -21,7 +19,11 @@ let isDragging = false;
 let dragPosition = { x: 0, y: 0 };
 let prevPosition = { x: 0, y: 0 };
 
-//let translateMatrix = translate(0, 0, 0);
+let currOffset = { x: 0, y: 0 }; // this is used for drawing points
+
+// States associated with user drawing
+let currentPoint = null;
+let userLines = [];
 
 /**
  * Initial WebGL setup
@@ -38,6 +40,7 @@ const main = () => {
   canvas.addEventListener("mousedown", downHandler, false);
   canvas.addEventListener("mousemove", moveHandler, false);
   canvas.addEventListener("mouseup", upHandler, false);
+  canvas.addEventListener("contextmenu", rightClickHandler, false);
 
   // WebGL boilerplate
   gl = WebGLUtils.setupWebGL(canvas);
@@ -58,13 +61,12 @@ const scrollHandler = (e) => {
   if (!svg) return true; // Don't do anything if there is no SVG loaded
 
   const { deltaY } = e;
-  const scrollScale = 10;
 
   // Zoom is bounded on [0.1, 10]
-  if (deltaY > 0) {
-    zoom = Math.min(zoom + deltaY / scrollScale, 10);
+  if (deltaY < 0) {
+    zoom = Math.min(zoom - deltaY / SCROLL_SCALE, 10);
   } else {
-    zoom = Math.max(zoom + deltaY / scrollScale, 0.1);
+    zoom = Math.max(zoom - deltaY / SCROLL_SCALE, 0.1);
   }
   setZoomTransform();
   renderSvg();
@@ -83,6 +85,7 @@ const cursorPosition = (e) => {
  * Handles click events in the canvas
  */
 const downHandler = (e) => {
+  if (!svg || e.which === 3) return true;
   isDragging = true;
   //console.log(cursorPosition(e));
   dragPosition = cursorPosition(e);
@@ -123,14 +126,23 @@ const moveHandler = (e) => {
 };
 
 const upHandler = (e) => {
-  if (!isDragging) return true;
+  if (!isDragging || e.which === 3) return false;
   isDragging = false;
-
   const pos = cursorPosition(e);
 
   const { x, y } = normalizeCoords(pos);
 
   prevPosition = { x, y };
+  currOffset = pos;
+  return false;
+};
+
+const rightClickHandler = (e) => {
+  console.log(cursorPosition(e));
+  const pos = cursorPosition(e);
+  const x = (pos.x - currOffset.x) / canvas.width;
+  console.log({ x });
+  e.preventDefault();
 };
 
 /**
@@ -172,17 +184,23 @@ const renderSvg = () => {
     const x2 = parseFloat(line.getAttribute("x2"));
     const y2 = parseFloat(line.getAttribute("y2"));
 
-    //const color = line.getAttribute("stroke")
-    // ? parseInt(`0x${line.getAttribute("stroke").substring(1)}`)
-    //  : 0;
-    //console.log(color);
+    const color = line.getAttribute("stroke")
+      ? parseInt(line.getAttribute("stroke"), 16)
+      : 0;
+
+    const colorVec = vec4(
+      ((color & 0xff0000) >> 16) / 256,
+      ((color & 0x00ff00) >> 8) / 256,
+      (color & 0x0000ff) / 256,
+      1
+    );
 
     //console.log({ x1, y1, x2, y2 });
     points.push(vec4(x1, y1, 0, 1));
     points.push(vec4(x2, y2, 0, 1));
 
-    colors.push(vec4(1, 0, 0, 1));
-    colors.push(vec4(1, 0, 0, 1));
+    colors.push(colorVec);
+    colors.push(colorVec);
     //colors.push(vec4(color & 0xff0000, color & 0x00ff00, color & 0x0000ff, 1));
   });
 
@@ -218,12 +236,16 @@ const setOrthoTransform = () => {
   const { x, y, width, height } =
     svg.getElementsByTagName("svg")[0].viewBox.baseVal;
 
-  const orthoMatrix = ortho(x, x + width, y + height, y, 1, -1);
+  const size = Math.max(width, height);
+  const orthoMatrix = ortho(x, x + size, y + size, y, 1, -1);
   const orthoTransform = gl.getUniformLocation(program, "orthoTransform");
   gl.uniformMatrix4fv(orthoTransform, false, flatten(orthoMatrix));
 };
 
-const setTranslateTransform = () => {
+/**
+ * Sets the default drag translation transform matrix
+ */
+const translateTransform = () => {
   const translateMatrix = translate(0, 0, 0);
   const translateTransform = gl.getUniformLocation(
     program,
@@ -235,5 +257,5 @@ const setTranslateTransform = () => {
 const setAllTransforms = () => {
   setZoomTransform();
   setOrthoTransform();
-  setTranslateTransform();
+  translateTransform();
 };
