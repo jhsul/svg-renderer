@@ -14,15 +14,17 @@ let zoom = 1;
 // Canvas HTML element
 let canvas = null;
 
+// SVG worldspace information
+let viewBox = null;
+let originalViewBox = null;
+
 // States associated with the dragging mechanic
 let isDragging = false;
-let dragPosition = { x: 0, y: 0 };
-let prevPosition = { x: 0, y: 0 };
+let dragStart = { x: 0, y: 0 };
 
-let currOffset = { x: 0, y: 0 }; // this is used for drawing points
-
-// States associated with user drawing
-let currentPoint = null;
+// Current point for user drawing
+let userPoint = null;
+let userEnd = null;
 let userLines = [];
 
 /**
@@ -36,11 +38,16 @@ const main = () => {
   canvas.width = CANVAS_SIZE;
   canvas.height = CANVAS_SIZE;
 
+  // Canvas event listeners
   canvas.addEventListener("wheel", scrollHandler, false);
   canvas.addEventListener("mousedown", downHandler, false);
   canvas.addEventListener("mousemove", moveHandler, false);
   canvas.addEventListener("mouseup", upHandler, false);
   canvas.addEventListener("contextmenu", rightClickHandler, false);
+
+  // Reset button event listener
+  const body = document.getElementsByTagName("body")[0];
+  body.addEventListener("keypress", resetHandler, false);
 
   // WebGL boilerplate
   gl = WebGLUtils.setupWebGL(canvas);
@@ -58,91 +65,116 @@ const main = () => {
  * Handles scrolling events in the canvas
  */
 const scrollHandler = (e) => {
-  if (!svg) return true; // Don't do anything if there is no SVG loaded
+  if (!svg) return true;
 
   const { deltaY } = e;
+  const pos = cursorPosition(e);
 
+  let newZoom;
   // Zoom is bounded on [0.1, 10]
   if (deltaY < 0) {
-    zoom = Math.min(zoom - deltaY / SCROLL_SCALE, 10);
+    // Zooming in
+    newZoom = Math.min(zoom - deltaY / SCROLL_SCALE, 10);
   } else {
-    zoom = Math.max(zoom - deltaY / SCROLL_SCALE, 0.1);
+    // Zooming out
+    newZoom = Math.max(zoom - deltaY / SCROLL_SCALE, 0.1);
   }
-  setZoomTransform();
-  renderSvg();
+
+  zoom = newZoom;
+
+  // How far the viewbox needs to be shifted to "focus" on the mouse
+
+  viewBox = {
+    x: viewBox.x,
+    y: viewBox.y,
+    size: originalViewBox.size / zoom,
+  };
+
+  setTransform();
+  draw();
   e.preventDefault();
 };
 
 /**
- * Helper function that calculates the cursor position relative to the canvas for mouse events
+ * Helper function that calculates cursor position from mouse events
+ * It returns the mouse's coordinates in the SVG viewbox
  */
 const cursorPosition = (e) => {
   const rect = canvas.getBoundingClientRect();
-  return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  const canvasPos = {
+    x: e.clientX - rect.left,
+    y: e.clientY - rect.top,
+  };
+
+  const svgPos = {
+    x: (viewBox.size / CANVAS_SIZE) * canvasPos.x + viewBox.x,
+    y: (viewBox.size / CANVAS_SIZE) * canvasPos.y + viewBox.y,
+  };
+
+  return svgPos;
 };
 
 /**
- * Handles click events in the canvas
+ * Left click down event (begin dragging)
  */
 const downHandler = (e) => {
-  if (!svg || e.which === 3) return true;
+  if (!svg || e.which !== 1) return true;
   isDragging = true;
-  //console.log(cursorPosition(e));
-  dragPosition = cursorPosition(e);
+  const pos = cursorPosition(e);
+  dragStart = pos;
+  console.log(pos);
   e.preventDefault();
 };
 
 /**
- * Helper that makes adjustments to raw mouse event coordinates
+ * Mouse movement handler for canvas
  */
-const normalizeCoords = (pos) => {
-  const x =
-    (2 * (pos.x - dragPosition.x)) / (canvas.width * zoom) + prevPosition.x;
-  const y =
-    (-2 * (pos.y - dragPosition.y)) / (canvas.height * zoom) + prevPosition.y;
-
-  return { x, y };
+const moveHandler = (e) => {
+  if (!svg) return true;
+  const pos = cursorPosition(e);
+  if (isDragging) {
+    viewBox = {
+      x: viewBox.x - pos.x + dragStart.x,
+      y: viewBox.y - pos.y + dragStart.y,
+      size: viewBox.size,
+    };
+    setTransform();
+  } else {
+    if (userPoint) {
+      userEnd = pos;
+    }
+  }
+  draw();
 };
 
 /**
- * Handles mouse movement events in the canvas
+ * Left click release event (stop dragging)
  */
-const moveHandler = (e) => {
-  if (!isDragging) return true;
-
-  const pos = cursorPosition(e);
-
-  const { x, y } = normalizeCoords(pos);
-
-  const translateMatrix = translate(x, y, 0);
-
-  const translateTransform = gl.getUniformLocation(
-    program,
-    "translateTransform"
-  );
-  gl.uniformMatrix4fv(translateTransform, false, flatten(translateMatrix));
-
-  renderSvg();
-};
-
 const upHandler = (e) => {
-  if (!isDragging || e.which === 3) return false;
+  if (!isDragging || e.which !== 1) return false;
   isDragging = false;
-  const pos = cursorPosition(e);
-
-  const { x, y } = normalizeCoords(pos);
-
-  prevPosition = { x, y };
-  currOffset = pos;
   return false;
 };
 
 const rightClickHandler = (e) => {
-  console.log(cursorPosition(e));
   const pos = cursorPosition(e);
-  const x = (pos.x - currOffset.x) / canvas.width;
-  console.log({ x });
+  if (userPoint) {
+    userLines.push([userPoint, pos]);
+    userPoint = null;
+    draw();
+  } else {
+    userPoint = pos;
+  }
+
   e.preventDefault();
+  return false;
+};
+
+const resetHandler = (e) => {
+  if (e.key !== "r") return false;
+  viewBox = originalViewBox;
+  setTransform();
+  draw();
 };
 
 /**
@@ -158,9 +190,17 @@ const fileHandler = () => {
       const text = e.target.result;
       const parser = new DOMParser();
       svg = parser.parseFromString(text, "text/xml");
+
+      const { x, y, width, height } =
+        svg.getElementsByTagName("svg")[0].viewBox.baseVal;
+      const size = Math.max(width, height);
+      originalViewBox = { x, y, size };
+      viewBox = originalViewBox;
+
       console.log(svg);
-      setAllTransforms();
-      renderSvg();
+
+      setTransform();
+      draw();
     };
     reader.onerror = (e) => {
       console.log("Some error reading the file");
@@ -168,15 +208,14 @@ const fileHandler = () => {
   }
 };
 
-const renderSvg = () => {
+const draw = () => {
   if (!svg) return null;
 
   const lines = [...svg.getElementsByTagName("line")];
+
   const points = [];
   const colors = [];
 
-  //const color = gl.getUniformLocation(program, "fColor");
-  //gl.uniform4fv(color, flatten(vec4(0, 0, 0, 1)));
   lines.forEach((line) => {
     const x1 = parseFloat(line.getAttribute("x1"));
     const y1 = parseFloat(line.getAttribute("y1"));
@@ -195,14 +234,28 @@ const renderSvg = () => {
       1
     );
 
-    //console.log({ x1, y1, x2, y2 });
     points.push(vec4(x1, y1, 0, 1));
     points.push(vec4(x2, y2, 0, 1));
 
     colors.push(colorVec);
     colors.push(colorVec);
-    //colors.push(vec4(color & 0xff0000, color & 0x00ff00, color & 0x0000ff, 1));
   });
+
+  userLines.forEach(([pointA, pointB]) => {
+    points.push(vec4(pointA.x, pointA.y, 0, 1));
+    points.push(vec4(pointB.x, pointB.y, 0, 1));
+
+    colors.push(vec4(0, 0, 0, 1));
+    colors.push(vec4(0, 0, 0, 1));
+  });
+
+  if (userPoint && userEnd) {
+    points.push(vec4(userPoint.x, userPoint.y, 0, 1));
+    points.push(vec4(userEnd.x, userEnd.y, 0, 1));
+
+    colors.push(vec4(1, 0, 0, 1));
+    colors.push(vec4(1, 0, 0, 1));
+  }
 
   const pBuffer = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, pBuffer);
@@ -226,36 +279,11 @@ const renderSvg = () => {
   gl.drawArrays(gl.LINES, 0, points.length);
 };
 
-const setZoomTransform = () => {
-  const zoomMatrix = scalem(zoom, zoom, zoom);
-  const zoomTransform = gl.getUniformLocation(program, "zoomTransform");
-  gl.uniformMatrix4fv(zoomTransform, false, flatten(zoomMatrix));
-};
+const setTransform = () => {
+  const { x, y, size } = viewBox;
 
-const setOrthoTransform = () => {
-  const { x, y, width, height } =
-    svg.getElementsByTagName("svg")[0].viewBox.baseVal;
-
-  const size = Math.max(width, height);
+  //const size = Math.max(width, height);
   const orthoMatrix = ortho(x, x + size, y + size, y, 1, -1);
   const orthoTransform = gl.getUniformLocation(program, "orthoTransform");
   gl.uniformMatrix4fv(orthoTransform, false, flatten(orthoMatrix));
-};
-
-/**
- * Sets the default drag translation transform matrix
- */
-const translateTransform = () => {
-  const translateMatrix = translate(0, 0, 0);
-  const translateTransform = gl.getUniformLocation(
-    program,
-    "translateTransform"
-  );
-  gl.uniformMatrix4fv(translateTransform, false, flatten(translateMatrix));
-};
-
-const setAllTransforms = () => {
-  setZoomTransform();
-  setOrthoTransform();
-  translateTransform();
 };
