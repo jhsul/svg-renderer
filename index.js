@@ -179,6 +179,7 @@ const upHandler = (e) => {
  * Right click mouse event (draw points)
  */
 const rightClickHandler = (e) => {
+  if (!svg) return false;
   const pos = cursorPosition(e);
   if (userPoint) {
     userLines.push([userPoint, pos]);
