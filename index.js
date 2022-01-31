@@ -1,3 +1,17 @@
+/**
+ * January 31, 2022
+ * Jack Sullivan
+ * CS 4731 Project 1
+ *
+ * This is my submission for project 1. A live demo is available on github:
+ * https://jhsul.github.io/svg-renderer/
+ *
+ * Extra credit:
+ * I implemented an export feature which will save the svg along with any
+ * user created lines. You can save it with the export button. If there is
+ * no svg loaded, then it will not do anything.
+ */
+
 // Constants
 const CANVAS_SIZE = 600;
 const SCROLL_SCALE = 500; // smaller = more sensitive
@@ -70,24 +84,28 @@ const scrollHandler = (e) => {
   const { deltaY } = e;
   const pos = cursorPosition(e);
 
-  let newZoom;
   // Zoom is bounded on [0.1, 10]
-  if (deltaY < 0) {
-    // Zooming in
-    newZoom = Math.min(zoom - deltaY / SCROLL_SCALE, 10);
-  } else {
-    // Zooming out
-    newZoom = Math.max(zoom - deltaY / SCROLL_SCALE, 0.1);
-  }
+  zoom = 1 - deltaY / SCROLL_SCALE;
 
-  zoom = newZoom;
+  // Cap the zoom between 0.1 and 10
+  const lowerBound = 0.1 * originalViewBox.size;
+  const upperBound = 10 * originalViewBox.size;
+
+  const newSize = Math.min(
+    upperBound,
+    Math.max(lowerBound, viewBox.size / zoom)
+  );
 
   // How far the viewbox needs to be shifted to "focus" on the mouse
+  const offset = {
+    x: pos.x - viewBox.x,
+    y: pos.y - viewBox.y,
+  };
 
   viewBox = {
-    x: viewBox.x,
-    y: viewBox.y,
-    size: originalViewBox.size / zoom,
+    x: pos.x - (offset.x / viewBox.size) * newSize,
+    y: pos.y - (offset.y / viewBox.size) * newSize,
+    size: newSize,
   };
 
   setTransform();
@@ -139,12 +157,13 @@ const moveHandler = (e) => {
       size: viewBox.size,
     };
     setTransform();
+    draw();
   } else {
     if (userPoint) {
       userEnd = pos;
+      draw();
     }
   }
-  draw();
 };
 
 /**
@@ -156,6 +175,9 @@ const upHandler = (e) => {
   return false;
 };
 
+/**
+ * Right click mouse event (draw points)
+ */
 const rightClickHandler = (e) => {
   const pos = cursorPosition(e);
   if (userPoint) {
@@ -170,6 +192,9 @@ const rightClickHandler = (e) => {
   return false;
 };
 
+/**
+ * Reset the viewbox
+ */
 const resetHandler = (e) => {
   if (e.key !== "r") return false;
   viewBox = originalViewBox;
@@ -191,8 +216,10 @@ const fileHandler = () => {
       const parser = new DOMParser();
       svg = parser.parseFromString(text, "text/xml");
 
-      const { x, y, width, height } =
-        svg.getElementsByTagName("svg")[0].viewBox.baseVal;
+      const { x, y, width, height } = svg.getElementsByTagName("svg")[0].viewBox
+        ? svg.getElementsByTagName("svg")[0].viewBox.baseVal
+        : { x: 0, y: 0, width: CANVAS_SIZE, height: CANVAS_SIZE };
+
       const size = Math.max(width, height);
       originalViewBox = { x, y, size };
       viewBox = originalViewBox;
@@ -208,6 +235,41 @@ const fileHandler = () => {
   }
 };
 
+/**
+ * Exports the currently loaded svg along with any user defined lines
+ */
+const exportHandler = async () => {
+  if (!svg) return false;
+
+  const root = svg.getElementsByTagName("svg")[0];
+  userLines.forEach(([pointA, pointB]) => {
+    const line = svg.createElement("line");
+    line.setAttribute("x1", pointA.x.toString());
+    line.setAttribute("y1", pointA.y.toString());
+
+    line.setAttribute("x2", pointB.x.toString());
+    line.setAttribute("y2", pointB.y.toString());
+
+    line.setAttribute("stroke", "#000000");
+    root.appendChild(line);
+  });
+  const serializer = new XMLSerializer();
+  const xmlString = serializer.serializeToString(svg);
+
+  const blob = new Blob([xmlString], { type: "text/xml" });
+
+  const fileHandle = await window.showSaveFilePicker({
+    types: [{ description: "SVG Export", accept: { "text/plain": [".svg"] } }],
+  });
+  const fileStream = await fileHandle.createWritable();
+
+  await fileStream.write(blob);
+  await fileStream.close();
+};
+
+/**
+ * Draws all user defined lines and the base svg image
+ */
 const draw = () => {
   if (!svg) return null;
 
@@ -224,9 +286,8 @@ const draw = () => {
     const y2 = parseFloat(line.getAttribute("y2"));
 
     const color = line.getAttribute("stroke")
-      ? parseInt(line.getAttribute("stroke"), 16)
+      ? parseInt(line.getAttribute("stroke").substring(1), 16)
       : 0;
-
     const colorVec = vec4(
       ((color & 0xff0000) >> 16) / 256,
       ((color & 0x00ff00) >> 8) / 256,
@@ -279,10 +340,12 @@ const draw = () => {
   gl.drawArrays(gl.LINES, 0, points.length);
 };
 
+/**
+ * Set the transform matrix based on the current viewbox
+ */
 const setTransform = () => {
   const { x, y, size } = viewBox;
 
-  //const size = Math.max(width, height);
   const orthoMatrix = ortho(x, x + size, y + size, y, 1, -1);
   const orthoTransform = gl.getUniformLocation(program, "orthoTransform");
   gl.uniformMatrix4fv(orthoTransform, false, flatten(orthoMatrix));

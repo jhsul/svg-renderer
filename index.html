@@ -24,9 +24,8 @@
       varying vec4 fColor;
 
       void main() {
-        gl_Position =  orthoTransform * vPosition;
+        gl_Position = orthoTransform * vPosition;
         fColor = vColor;
-
       }
     </script>
     <script id="fshader" type="x-shader/x-fragment">
@@ -47,7 +46,7 @@
     <script src="index.js"></script>
   </head>
 
-  <body onload="main()">
+  <body onload="main();">
     <div class="global-container">
       <div class="content">
         <h1>SVG Renderer</h1>
@@ -66,7 +65,7 @@
         <div class="button-row">
           <input type="file" id="upload" onchange="fileHandler();" />
           <div class="row-spacer"></div>
-          <button>Export</button>
+          <button onclick="exportHandler()">Export</button>
         </div>
         <br />
       </div>
