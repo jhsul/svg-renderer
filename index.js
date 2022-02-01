@@ -228,6 +228,7 @@ const fileHandler = () => {
       viewBox = originalViewBox;
 
       console.log(svg);
+      document.getElementById("export").removeAttribute("disabled");
 
       setTransform();
       draw();
