@@ -7,9 +7,14 @@
  * https://jhsul.github.io/svg-renderer/
  *
  * Extra credit:
+ * -------------
  * I implemented an export feature which will save the svg along with any
  * user created lines. You can save it with the export button. If there is
  * no svg loaded, then it will not do anything.
+ *
+ * My zoom functionality also will always follow the cursor. I'm not sure if
+ * what I have counts as extra credit as per the email that was sent out, but
+ * I figured I'd mention it.
  */
 
 // Constants
@@ -22,13 +27,10 @@ let svg = null;
 // WebGL context
 let gl = null;
 
-// The zoom level (bounded by 0.1 and 10)
-let zoom = 1;
-
 // Canvas HTML element
 let canvas = null;
 
-// SVG worldspace information
+// SVG worldspace
 let viewBox = null;
 let originalViewBox = null;
 
@@ -85,7 +87,7 @@ const scrollHandler = (e) => {
   const pos = cursorPosition(e);
 
   // Zoom is bounded on [0.1, 10]
-  zoom = 1 - deltaY / SCROLL_SCALE;
+  const zoom = 1 - deltaY / SCROLL_SCALE;
 
   // Cap the zoom between 0.1 and 10
   const lowerBound = 0.1 * originalViewBox.size;
@@ -252,6 +254,7 @@ const exportHandler = async () => {
     line.setAttribute("y2", pointB.y.toString());
 
     line.setAttribute("stroke", "#000000");
+    line.setAttribute("stroke-width", ".1%");
     root.appendChild(line);
   });
   const serializer = new XMLSerializer();
@@ -260,7 +263,9 @@ const exportHandler = async () => {
   const blob = new Blob([xmlString], { type: "text/xml" });
 
   const fileHandle = await window.showSaveFilePicker({
-    types: [{ description: "SVG Export", accept: { "text/plain": [".svg"] } }],
+    types: [
+      { description: "Your SVG file", accept: { "text/plain": [".svg"] } },
+    ],
   });
   const fileStream = await fileHandle.createWritable();
 
